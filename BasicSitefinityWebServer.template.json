@@ -1,0 +1,429 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Deploys a new Sitefinity instance on a Windows Server 2012 R2 EC2 instance using MsSql express RDS instance. The IP address of the resulting instance is outputted after the stack creation completes but the web site will not be available. It takes up to half an hour to fully configure the web server and startup the website.",
+    "Parameters": {
+        "SitefinityLicenseFileLocation": {
+            "Description": "The http(s) location of the license file that will be used to initialize your new Sitefinity instance. You can create a signed S3 URL for private resources using tools like Bucket Explorer.",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Description": "Public/private key pairs allow you to securely connect to your instance after it launches",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "WindowsInstanceType": {
+            "Description": "Amazon EC2 instance type for the Windows Instances.",
+            "Type": "String",
+            "Default": "m3.xlarge",
+            "AllowedValues": [ "t2.micro", "t2.small", "t2.medium", "t2.large", "m3.large", "m3.xlarge", "m3.2xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge" ]
+        },
+        "SourceCidrForRDP": {
+            "Description": "IP CIDR from which you are allowed to RDP into the Sitefinity web server instances. You can add rules later by modifying the created security groups e.g. 54.32.98.160/32. For all IPs use 0.0.0.0/0 (big security compromise).",
+            "Type": "String",
+            "MinLength": "9",
+            "MaxLength": "18",
+            "AllowedPattern": "^([0-9]+\\.){3}[0-9]+\\/[0-9]+$"
+        },
+        "SitefinityWebAppZipLocation": {
+            "Description": "The http location of the Sitefinity web app zip file that will be deployed. The zip file should contain the web application in its root folder. You can create a signed S3 URL for private resources using tools like Bucket Explorer",
+            "Type": "String",
+            "Default": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/sitefinity-web-app/8.2.5901.0/SitefinityWebApp.zip"
+        },
+        "SitefinityAdminUserName": {
+            "Description": "The Sitefinity administrator user name.",
+            "Type": "String",
+            "MinLength": "1"
+        },
+        "SitefinityAdminEmail": {
+            "Description": "The email of the Sitefinity administrator.",
+            "Type": "String",
+            "AllowedPattern": "^[\\w\\._%+-]+@[\\w\\.-]+\\.[\\w]{2,10}$"
+        },
+        "SitefinityAdminPassword": {
+            "NoEcho": "true",
+            "Description": "The password of the Sitefinity administrator. Must be at least 6 characters long.",
+            "Type": "String",
+            "MinLength": "6"
+        },
+        "SfDBName": {
+            "Description": "The name of the database that this Sitefinity instance will create in the Ms SQL RDS instance.",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "15",
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "RdsDBAdminUserName": {
+            "Description": "The RDS instance (Database server) admin account username. Must be between 1 and 16 alphanumeric characters starting with a letter.",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "16",
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "RdsDBAdminPassword": {
+            "NoEcho": "true",
+            "Description": "The RDS instance (Database server) admin account password. Must be at between 8 and 41 symbols long. Only printable ASCII characters may be used.",
+            "Type": "String",
+            "MinLength": "8",
+            "MaxLength": "41",
+            "AllowedPattern": "[a-zA-Z0-9]*"
+        }
+    },
+    "Mappings": {
+        "AWSInstanceType2Arch": {
+            "t2.micro": { "Arch": "64" },
+            "t2.small": { "Arch": "64" },
+            "t2.medium": { "Arch": "64" },
+            "t2.large": { "Arch": "64" },
+            "m3.large": { "Arch": "64" },
+            "m3.xlarge": { "Arch": "64" },
+            "m3.2xlarge": { "Arch": "64" },
+            "c3.large": { "Arch": "64" },
+            "c3.xlarge": { "Arch": "64" },
+            "c3.2xlarge": { "Arch": "64" },
+            "c3.4xlarge": { "Arch": "64" },
+            "c3.8xlarge": { "Arch": "64" }
+        },
+        "WinSrv2012R2AmiByRegionArch": {
+            "us-east-1": { "64": "ami-e4034a8e" },
+            "us-west-2": { "64": "ami-b25e42d3" },
+            "us-west-1": { "64": "ami-a99df5c9" },
+            "eu-west-1": { "64": "ami-1ffa5a6c" },
+            "eu-central-1": { "64": "ami-c64559aa" },
+            "ap-southeast-1": { "64": "ami-1992517a" },
+            "ap-northeast-1": { "64": "ami-fe436b90" },
+            "sa-east-1": { "64": "ami-0abd3966" },
+            "ap-southeast-2": { "64": "ami-cec69ead" }
+        }
+    },
+    "Conditions": {
+        "Is-EC2-VPC": {
+            "Fn::Or": [
+                { "Fn::Equals": [ { "Ref": "AWS::Region" }, "eu-central-1" ] },
+                { "Fn::Equals": [ { "Ref": "AWS::Region" }, "cn-north-1" ] }
+            ]
+        },
+        "Is-EC2-Classic": { "Fn::Not": [ { "Condition": "Is-EC2-VPC" } ] }
+    },
+    "Resources": {
+        "SfBasicWebServer1": {
+            "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "configSets": {
+                        "config": [
+                            "dscSetup",
+                            "runDsc",
+                            "sfStartup"
+                        ]
+                    },
+                    "dscSetup": {
+                        "files": {
+                            "c:\\cfn\\cfn-hup.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.SfBasicWebServer1.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -c config -s ",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            },
+                                            " -r SfBasicWebServer1",
+                                            " --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\scripts\\Unzip-Archive.ps1": {
+                                "source": "https://s3.amazonaws.com/quickstart-reference/microsoft/utilities/latest/scripts/Unzip-Archive.ps1"
+                            },
+                            "c:\\cfn\\scripts\\SitefinityWebNodeDSC.ps1": {
+                                "source": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/dsc-setups/SitefinityWebNodeDSC0.2.ps1"
+                            },
+                            "c:\\Program Files\\WindowsPowerShell\\PackedPSModules\\Modules\\xPSDesiredStateConfiguration_3.0.3.4.zip": {
+                                "source": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/dsc-modules/xPSDesiredStateConfiguration_3.0.3.4.zip"
+                            },
+                            "c:\\Program Files\\WindowsPowerShell\\PackedPSModules\\Modules\\xWebAdministration-1.7.0.0-PSGallery.zip": {
+                                "source": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/dsc-modules/xWebAdministration-1.7.0.0-PSGallery.zip"
+                            },
+                            "c:\\Program Files\\WindowsPowerShell\\PackedPSModules\\Modules\\PowerShellAccessControl_v4.0_preview_20150417.zip": {
+                                "source": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/dsc-modules/PowerShellAccessControl_v4.0_preview_20150417.zip"
+                            },
+                            "c:\\cfn\\packages\\SitefinityWebApp.zip": {
+                                "source": { "Ref": "SitefinityWebAppZipLocation" }
+                            }
+                        },
+                        "services": {
+                            "windows": {
+                                "cfn-hup": {
+                                    "enabled": "true",
+                                    "ensureRunning": "true",
+                                    "files": [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+                        "commands": {
+                            "a-set-execution-policy": {
+                                "command": "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force",
+                                "waitAfterCompletion": "0"
+                            },
+                            "b-unzip-modules": {
+                                "command": "powershell.exe -command \"Get-ChildItem 'C:\\Program Files\\WindowsPowerShell\\PackedPSModules\\Modules' *.zip | Foreach-Object { c:\\cfn\\scripts\\unzip-archive.ps1 -source $_.fullname -destination 'C:\\Program Files\\WindowsPowerShell\\Modules'}\"",
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    },
+                    "runDsc": {
+                        "commands": {
+                            "a-execute-dsc": {
+                                "command": "powershell.exe -command c:\\cfn\\scripts\\SitefinityWebNodeDSC.ps1",
+                                "waitAfterCompletion": "forever"
+                            }
+                        }
+                    },
+                    "sfStartup": {
+                        "files": {
+                            "C:\\Sitefinity\\WebApp\\App_Data\\Sitefinity\\Sitefinity.lic": {
+                                "source": { "Ref": "SitefinityLicenseFileLocation" }
+                            },
+                            "C:\\Sitefinity\\WebApp\\App_Data\\Sitefinity\\Configuration\\StartupConfig.config": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "<startupConfig\r\n",
+                                            " enabled=\"True\"\r\n",
+                                            " initialized=\"False\"\r\n",
+                                            " username=\"",
+                                            {
+                                                "Ref": "SitefinityAdminUserName"
+                                            },
+                                            "\"\r\n",
+                                            " password=\"",
+                                            {
+                                                "Ref": "SitefinityAdminPassword"
+                                            },
+                                            "\"\r\n",
+                                            " email=\"",
+                                            {
+                                                "Ref": "SitefinityAdminEmail"
+                                            },
+                                            "\"\r\n",
+                                            " firstName=\"admin\"\r\n",
+                                            " lastName=\"admin\"\r\n",
+                                            " dbType=\"SqlServer\"\r\n",
+                                            " sqlInstance=\"",
+                                            {
+                                                "Fn::GetAtt": [ "SfDatabase", "Endpoint.Address" ]
+                                            },
+                                            "\"\r\n",
+                                            " dbName=\"",
+                                            {
+                                                "Ref": "SfDBName"
+                                            },
+                                            "\"\r\n",
+                                            " sqlAuthUserName=\"",
+                                            {
+                                                "Ref": "RdsDBAdminUserName"
+                                            },
+                                            "\"\r\n",
+                                            " sqlAuthUserPassword=\"",
+                                            {
+                                                "Ref": "RdsDBAdminPassword"
+                                            },
+                                            "\"\r\n/>"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "commands": {
+                            "a-invoke-sf-startup": {
+                                "command": "powershell.exe -command Invoke-WebRequest -Uri \"http://localhost\" -UseBasicParsing",
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "WinSrv2012R2AmiByRegionArch",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref": "WindowsInstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "WindowsInstanceType"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SfBasicWebServer1"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": "50",
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+                "SecurityGroups": [
+                    { "Ref": "EnableRDPSecurityGroup" },
+                    { "Ref": "EnableHttp80SecurityGroup" },
+                    { "Ref": "WebServersSecurityGroup" }
+                ],
+                "KeyName": {
+                    "Ref": "KeyPairName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref": "AWS::StackId"
+                                },
+                                " -r SfBasicWebServer1",
+                                " --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "\n",
+                                "</script>\n"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "SfDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "AllocatedStorage": 100,
+                "DBInstanceClass": "db.t2.medium",
+                "Engine": "sqlserver-ex",
+                "EngineVersion": "12.00.4422.0.v1",
+                "MasterUsername": {
+                    "Ref": "RdsDBAdminUserName"
+                },
+                "MasterUserPassword": {
+                    "Ref": "RdsDBAdminPassword"
+                },
+                "VPCSecurityGroups": { "Fn::If": [ "Is-EC2-VPC", [ { "Fn::GetAtt": [ "DBEC2SecurityGroup", "GroupId" ] } ], { "Ref": "AWS::NoValue" } ] },
+                "DBSecurityGroups": { "Fn::If": [ "Is-EC2-Classic", [ { "Ref": "DBSecurityGroup" } ], { "Ref": "AWS::NoValue" } ] }
+            }
+        },
+        "EnableRDPSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable RDP access for the specified ip range.",
+                "SecurityGroupIngress": [
+                    { "IpProtocol": "tcp", "FromPort": "3389", "ToPort": "3389", "CidrIp": { "Ref": "SourceCidrForRDP" } }
+                ]
+            }
+        },
+        "EnableHttp80SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable Access to IIS Web Servers from all ips",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "WebServersSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Used by all web servers to allow access to the dependent services like DB and Cache."
+            }
+        },
+        "DBEC2SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "Is-EC2-VPC",
+            "Properties": {
+                "GroupDescription": "Used by Db servers. Allows access from the Sitefinity front end security group.",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "1433",
+                        "ToPort": "1433",
+                        "SourceSecurityGroupId": {
+                            "Fn::GetAtt": [
+                                "WebServersSecurityGroup",
+                                "GroupId"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSecurityGroup": {
+            "Type": "AWS::RDS::DBSecurityGroup",
+            "Condition": "Is-EC2-Classic",
+            "Properties": {
+                "GroupDescription": "Used by Db servers. Allows access from the Sitefinity front end security group.",
+                "DBSecurityGroupIngress": {
+                    "EC2SecurityGroupName": { "Ref": "WebServersSecurityGroup" }
+                }
+            }
+        },
+    },
+    "Outputs": {
+        "WebsiteURL": {
+            "Value": { "Fn::Join": [ "", [ "http://", { "Fn::GetAtt": [ "SfBasicWebServer1", "PublicIp" ] }, "/Sitefinity" ] ] },
+            "Description": "Sitefinity Website URL"
+        }
+    }
+}
