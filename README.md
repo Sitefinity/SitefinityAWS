@@ -1,5 +1,5 @@
 # SitefinityAWS
-Components that facilitate setting up Sitefinity instances on Amazon AWS using CloudFomration templates and Powershell Desired State Configuration (DSC).
+Components that facilitate setting up Sitefinity instances on Amazon AWS using CloudFormation templates and Powershell Desired State Configuration (DSC).
 
 The basic setup consist of two main resources:
   1. Amazon EC2 Windows Server 2012 R2 instance configured from the latest public amazon basic image using powershell desired state configuration.
