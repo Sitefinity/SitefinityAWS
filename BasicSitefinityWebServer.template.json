@@ -26,7 +26,7 @@
         "SitefinityWebAppZipLocation": {
             "Description": "The http location of the Sitefinity web app zip file that will be deployed. The zip file should contain the web application in its root folder. You can create a signed S3 URL for private resources using tools like Bucket Explorer",
             "Type": "String",
-            "Default": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/sitefinity-web-app/8.2.5901.0/SitefinityWebApp.zip"
+            "Default": "https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/sitefinity-web-app/8.2.5900.0/SitefinityWebApp.zip"
         },
         "SitefinityAdminUserName": {
             "Description": "The Sitefinity administrator user name.",
@@ -45,12 +45,12 @@
             "MinLength": "6"
         },
         "SfDBName": {
-            "Description": "The name of the database that this Sitefinity instance will create in the Ms SQL RDS instance.",
+            "Description": "The name of the database that the Sitefinity web site will create in the MS SQL RDS instance.",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "15",
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters. Must be between 1 and 15 symbols in total length."
         },
         "RdsDBAdminUserName": {
             "Description": "The RDS instance (Database server) admin account username. Must be between 1 and 16 alphanumeric characters starting with a letter.",
@@ -58,7 +58,7 @@
             "MinLength": "1",
             "MaxLength": "16",
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters. Must be between 1 and 16 symbols in total length."
         },
         "RdsDBAdminPassword": {
             "NoEcho": "true",
@@ -418,7 +418,7 @@
                     "EC2SecurityGroupName": { "Ref": "WebServersSecurityGroup" }
                 }
             }
-        },
+        }
     },
     "Outputs": {
         "WebsiteURL": {
