@@ -5,6 +5,8 @@ The basic setup consist of two main resources:
   1. Amazon EC2 Windows Server 2012 R2 instance configured from the latest public amazon basic image using Powershell desired state configuration.
   2. Amazon RDS Microsoft SQL express instance.
 
+![Sitefinity simple setup Amazon AWS CloudFormation](http://d10fqi5lwwlsdr.cloudfront.net/sitefinityImages/default-source/default-album/basic-sitefinity-webapp-aws-crop-resize.png?sfvrsn=0)
+
 ## How to use:
 
   1. Choose which version of Sitefinity to use. The default version in this template is 8.2 using an empty project that is uploaded to a Sitefinity owned S3 storage at [this location](https://s3.eu-central-1.amazonaws.com/telerik-sitefinity/amazon-cloud-formation/sitefinity-web-app/8.2.5900.0/SitefinityWebApp.zip). If you wish to use another version create an empty project and upload it to your S3 storage as a .zip file that contains the site in its root folder.
