@@ -14,9 +14,9 @@ Once the creation of the stack is complete the windows instance that will be the
 ## About the template
 
 External dependencies:
-  1. Windows image id (AMI)
-  2. SitefinityWebApp.zip
-  3. Siteifnity.lic
-  4. SitefinityWebNodeDSC.ps1
-  5. Uzip-Archive.ps1
+  1. Windows image id (AMI of the latest basic Windows Server 2012 R2 image.)
+  2. SitefinityWebApp.zip (The zip of the Siteifnity web site you wish to deploy. The zip should contain the web.config in its root folder)
+  3. Siteifnity.lic (Your Sitefinity license file that you should upload to S3 and specify its location. Could be a trial license.)
+  4. SitefinityWebNodeDSC.ps1 (latest version: SitefinityWebNodeDSC0.2.ps1)
+  5. Unzip-Archive.ps1 (Used from the quick reference amazon bucket)
   6. Powershell DSC modules: xPSDesiredStateConfiguration, xWebAdministration, PowerShellAccessControl.
