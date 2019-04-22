@@ -85,15 +85,15 @@
             "c3.8xlarge": { "Arch": "64" }
         },
         "WinSrv2012R2AmiByRegionArch": {
-          "us-east-1": { "64": "ami-013e197b" },
-          "us-west-1": { "64": "ami-92fefdf2" },
-          "us-west-2": { "64": "ami-afe051d7" },
-          "eu-west-1": { "64": "ami-cc821eb5" },
-          "eu-central-1": { "64": "ami-3204995d" },
-          "ap-southeast-1": { "64": "ami-c83944b4" },
-          "ap-southeast-2": { "64": "ami-30a55952" },
-          "ap-northeast-1": { "64": "ami-1a7ee47c" },
-          "sa-east-1": { "64": "ami-d6c785ba" }
+          "us-east-1": { "64": "ami-0e775ae02dfe67fea" },
+          "us-west-1": { "64": "ami-09ca663e09891225b" },
+          "us-west-2": { "64": "ami-0a8d209357472bee1" },
+          "eu-west-1": { "64": "ami-03f8a7003ac359dc3" },
+          "eu-central-1": { "64": "ami-00295326eb2df74ae" },
+          "ap-southeast-1": { "64": "ami-0c512a41948d56a41" },
+          "ap-southeast-2": { "64": "ami-07dd8d162e848226a" },
+          "ap-northeast-1": { "64": "ami-0bc9076d1971b892f" },
+          "sa-east-1": { "64": "ami-0411d28c82e5ea0c0" }
         }
     },
     "Conditions": {
